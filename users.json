@@ -1,8 +1,12 @@
 {
     "dcid": {
-        "address": "123",
         "dest": "456",
         "xrpBalance": "789",
+        "tls": []
+    },
+    "739375301578194944": {
+        "xrpBalance": 0,
+        "dest": 996840,
         "tls": []
     }
 }

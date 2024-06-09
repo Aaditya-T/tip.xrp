@@ -3,7 +3,7 @@ import random
 
 USERFILE = "users.json"
 
-def registerUser(dcid,address):
+def registerUser(dcid):
     try:
         with open(USERFILE, "r") as f:
             users = json.load(f)
@@ -15,7 +15,6 @@ def registerUser(dcid,address):
     while rNum in [users[dcid]["dest"] for dcid in users]:
         rNum = random.randint(100000,999999)
     users[dcid] = {
-        "address": address,
         "xrpBalance": 0,
         "dest": rNum,
         "tls": []
@@ -27,7 +26,8 @@ def registerUser(dcid,address):
 def getUser(dcid):
     with open(USERFILE, "r") as f:
         users = json.load(f)
-    return users.get(dcid)
+    return users.get(f"{dcid}")
+
 #tl = {"currency": cur, "issuer": iss, "value": val}
 def addTl(dcid, tl):
     with open(USERFILE, "r") as f:
