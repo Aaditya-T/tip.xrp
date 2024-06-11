@@ -84,7 +84,7 @@ async def wallet(interaction: discord.Interaction):
 
 
 @tree.command(name="deposit", description="Deposit any currency to your account")
-async def deposit(interaction: discord.Interaction, amount: float, currency: Literal["XRP", "SOLO", "CSC", "ETH", "ZRPY", "ZRP"]):
+async def deposit(interaction: discord.Interaction, amount: float, currency: Literal["XRP", "SOLO", "CSC", "USD", "ZRP"]):
     curMain = currency
     if len(curMain) > 3:
         curMain = helper.str_to_hex(currency)
@@ -129,7 +129,10 @@ async def deposit(interaction: discord.Interaction, amount: float, currency: Lit
         value="You can directly pay to the address and destination tag above, but please make sure to include the correct destination tag!",
     )
     embed.set_image(url=qrcode)
-    embed.set_footer(text=f"Currency: {currency}", icon_url=curData["image"])
+    if currency != "XRP":
+        embed.set_footer(text=f"Currency: {currency}", icon_url=curData["image"])
+    else:
+        embed.set_footer(text=f"Currency: {currency}")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @tree.command(name="supported", description="List of supported currencies")
