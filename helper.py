@@ -1,7 +1,9 @@
 import json
 import random
+import xrpl
 
 USERFILE = "users.json"
+SUPPORTED = "supported.json" #list of supported currencies
 
 def registerUser(dcid):
     try:
@@ -78,4 +80,22 @@ def removeTlBalance(dcid, tl, amount):
             return True
     return False
 
+def getSupported():
+    with open(SUPPORTED, "r") as f:
+        return json.load(f)
+    
+def getCurData(cur):
+    with open(SUPPORTED, "r") as f:
+        data = json.load(f)
+        for i in data:
+            if i["currency"] == cur:
+                return i
+            
+def str_to_hex(s):
+    st = xrpl.utils.str_to_hex(s).upper()
+    if len(st) < 40:
+        st = st+"0"*(40-len(st))
+    return st
 
+if __name__ == '__main__':
+    str_to_hex("SOLO")

@@ -6,7 +6,7 @@ import xrpl.asyncio
 import json
 
 USER_FILE = "users.json"
-DESTADDR = "rbKoFeFtQr2cRMK2jRwhgTa1US9KU6v4L"
+DESTADDR = "rJAFQ2d6mUTgHHtLogPx5BB5NRT97ASFDy"
 
 class XRPLMonitorThread(Thread):
     def __init__(self, url):
@@ -22,7 +22,24 @@ class XRPLMonitorThread(Thread):
         #check which user has the destination tag
         for user in users:
             if int(users[user]["dest"]) == int(destTag):
-                users[user]["xrpBalance"] += amount
+                users[user]["xrpBalance"] += round(amount, 6)
+                with open(USER_FILE, "w") as f:
+                    json.dump(users, f)
+                return
+            
+    def add_tl_balance(self, amount, destTag, currency, issuer):
+        with open(USER_FILE, "r") as f:
+            users = json.load(f)
+        #check which user has the destination tag
+        for user in users:
+            if int(users[user]["dest"]) == int(destTag):
+                for tl in users[user]["tls"]:
+                    if tl["currency"] == currency and tl["issuer"] == issuer:
+                        tl["value"] += amount
+                        with open(USER_FILE, "w") as f:
+                            json.dump(users, f)
+                        return
+                users[user]["tls"].append({"currency": currency, "issuer": issuer, "value": amount})
                 with open(USER_FILE, "w") as f:
                     json.dump(users, f)
                 return
@@ -49,20 +66,26 @@ class XRPLMonitorThread(Thread):
         print("Transaction received:", message)
         txn = message.get("transaction")
         if txn.get("TransactionType") != "Payment":
+            print("Not a payment")
             return
         if txn.get("Destination") != DESTADDR:
+            print("Not for me")
             return
         destTag = txn.get("DestinationTag", None)
         if destTag is None:
+            print("No destination tag")
             return
         amount = txn.get("Amount")
-        if type(amount) != str:
-            return
-        amount = float(xrpl.utils.drops_to_xrp(amount))
-        if amount <= 1 and type(amount) == str:
-            return
-        print(f"Payment of {amount} XRP received with destination tag {destTag}")
-        self.add_xrp_balance(amount, destTag)
+        if type(amount) == str:
+            amount = float(xrpl.utils.drops_to_xrp(amount))
+            if amount <= 1 and type(amount) == str:
+                return
+            print(f"Payment of {amount} XRP received with destination tag {destTag}")
+            self.add_xrp_balance(amount, destTag)
+        elif type(amount) == dict:
+            amountt = float(amount["value"])
+            print(f"Payment of {amountt} {amount['currency']} received with destination tag {destTag}")
+            self.add_tl_balance(amountt, destTag, amount["currency"], amount["issuer"])
 
 
 async def main():

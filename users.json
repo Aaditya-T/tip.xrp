@@ -1,12 +1,1 @@
-{
-    "dcid": {
-        "dest": "456",
-        "xrpBalance": "789",
-        "tls": []
-    },
-    "739375301578194944": {
-        "xrpBalance": 2.0,
-        "dest": 996840,
-        "tls": []
-    }
-}
+{"dcid": {"dest": "456", "xrpBalance": "789", "tls": []}, "739375301578194944": {"xrpBalance": 2, "dest": 996840, "tls": [{"currency": "CSC", "issuer": "rCSCManTZ8ME9EoLrSHHYKW8PPwWMgkwr", "value": 6.0}, {"currency": "USD", "issuer": "rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq", "value": 2.0}]}}
