@@ -82,6 +82,43 @@ async def wallet(interaction: discord.Interaction):
     )
     await interaction.followup.send(embed=embed, ephemeral=True)
 
+@tree.command(name="send", description="Send a currency to another user")
+async def send(interaction: discord.Interaction, amount: float, currency: Literal["XRP", "SOLO", "CSC", "USD", "ZRP"], receiver: discord.User):
+    curMain = currency
+    if len(curMain) > 3:
+        curMain = helper.str_to_hex(currency)
+    userData = helper.getUser(interaction.user.id)
+    if userData is None:
+        await interaction.response.send_message(
+            "You are not registered!", ephemeral=True
+        )
+        return
+    if amount <= 0:
+        await interaction.response.send_message("Invalid amount", ephemeral=True)
+        return
+    if currency == "XRP":
+        if userData["xrpBalance"] < amount:
+            await interaction.response.send_message("Insufficient balance", ephemeral=True)
+            return
+        sent = helper.sendXRP(str(interaction.user.id), str(receiver.id), amount)
+        if not sent:
+            await interaction.response.send_message("Failed to send XRP", ephemeral=True)
+            return
+    else:
+        for tl in userData["tls"]:
+            if tl["currency"] == curMain:
+                if tl["value"] < amount:
+                    await interaction.response.send_message("Insufficient balance", ephemeral=True)
+                    return
+                sent = helper.sendTL(str(interaction.user.id), str(receiver.id), curMain, amount)
+                if not sent:
+                    await interaction.response.send_message("Failed to send", ephemeral=True)
+                    return
+                break
+        else:
+            await interaction.response.send_message("You don't have a trustline for this currency", ephemeral=True)
+            return
+    await interaction.response.send_message(f"Sent {amount} {currency} to {receiver.mention}", ephemeral=True)
 
 @tree.command(name="deposit", description="Deposit any currency to your account")
 async def deposit(interaction: discord.Interaction, amount: float, currency: Literal["XRP", "SOLO", "CSC", "USD", "ZRP"]):
@@ -95,7 +132,7 @@ async def deposit(interaction: discord.Interaction, amount: float, currency: Lit
             "You are not registered!", ephemeral=True
         )
         return
-    destTag = userData["dest"]
+    desttag = userData["dest"]
     if amount <= 0:
         await interaction.response.send_message("Invalid amount", ephemeral=True)
         return
@@ -111,7 +148,7 @@ async def deposit(interaction: discord.Interaction, amount: float, currency: Lit
     payload = {
         "TransactionType": "Payment",
         "Destination": DESTADDR,
-        "DestinationTag": destTag,
+        "DestinationTag": desttag,
         "Amount": amt,
     }
     response = sdk.payload.create(payload)
@@ -123,7 +160,7 @@ async def deposit(interaction: discord.Interaction, amount: float, currency: Lit
         color=random.randint(0, 0xFFFFFF),
     )
     embed.add_field(name="Amount", value=str(amount))
-    embed.add_field(name="Destination Tag", value=str(destTag))
+    embed.add_field(name="Destination Tag", value=str(desttag))
     embed.add_field(
         name="NOTE",
         value="You can directly pay to the address and destination tag above, but please make sure to include the correct destination tag!",
@@ -134,6 +171,133 @@ async def deposit(interaction: discord.Interaction, amount: float, currency: Lit
     else:
         embed.set_footer(text=f"Currency: {currency}")
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="withdraw", description="Withdraw any currency from your account to your wallet")
+async def withdraw(interaction: discord.Interaction, amount: float, currency: Literal["XRP", "SOLO", "CSC", "USD", "ZRP"], address: str, desttag: int = None):
+    await interaction.response.defer(ephemeral=True)
+    curMain = currency
+    if len(curMain) > 3:
+        curMain = helper.str_to_hex(currency)
+    userData = helper.getUser(interaction.user.id)
+    if userData is None:
+        await interaction.followup.send(
+            "You are not registered!", ephemeral=True
+        )
+        return
+    if amount <= 0:
+        await interaction.followup.send("Invalid amount", ephemeral=True)
+        return
+    if currency == "XRP":
+        if userData["xrpBalance"] < amount:
+            await interaction.followup.send("Insufficient balance", ephemeral=True)
+            return
+        # sent = helper.send_xrp_to_wallet(address, amount, str(interaction.user.id), desttag)
+        loop = asyncio.get_event_loop()
+        sent = await loop.run_in_executor(None, helper.send_xrp_to_wallet, address, amount, str(interaction.user.id), desttag)
+        if not sent:
+            await interaction.followup.send("Failed to withdraw XRP", ephemeral=True)
+            return
+    else:
+        for tl in userData["tls"]:
+            if tl["currency"] == curMain:
+                if tl["value"] < amount:
+                    await interaction.followup.send("Insufficient balance", ephemeral=True)
+                    return
+                # sent = helper.send_tl_to_wallet(address, amount, str(interaction.user.id), curMain, tl["issuer"], desttag)
+                loop = asyncio.get_event_loop()
+                sent = await loop.run_in_executor(None, helper.send_tl_to_wallet, address, amount, str(interaction.user.id), curMain, tl["issuer"], desttag)
+                if not sent:
+                    await interaction.followup.send("Failed to withdraw", ephemeral=True)
+                    return
+                break
+        else:
+            await interaction.followup.send("You don't have a trustline for this currency", ephemeral=True)
+            return
+    await interaction.followup.send(f"Withdrew {amount} {currency} to your wallet", ephemeral=True)
+
+@tree.command(name="swap", description="Swap currencies using AMM")
+async def swap(interaction: discord.Interaction, amount: float, fromcurrency: Literal["XRP", "SOLO", "CSC", "USD", "ZRP"], tocurrency: Literal["XRP", "SOLO", "CSC", "USD", "ZRP"]):
+    curMain = fromcurrency
+    if len(curMain) > 3:
+        curMain = helper.str_to_hex(fromcurrency)
+    userData = helper.getUser(interaction.user.id)
+    if userData is None:
+        await interaction.response.send_message(
+            "You are not registered!", ephemeral=True
+        )
+        return
+    if amount <= 0:
+        await interaction.response.send_message("Invalid amount", ephemeral=True)
+        return
+    if fromcurrency == tocurrency:
+        await interaction.response.send_message("Cannot swap same currency", ephemeral=True)
+        return
+    if fromcurrency != "XRP":
+        for tl in userData["tls"]:
+            if tl["currency"] == curMain:
+                if tl["value"] < amount:
+                    await interaction.response.send_message("Insufficient balance", ephemeral=True)
+                    return
+                break
+        else:
+            await interaction.response.send_message("You don't have a trustline for this currency", ephemeral=True)
+            return
+    else:
+        if userData["xrpBalance"] < amount:
+            await interaction.response.send_message("Insufficient balance", ephemeral=True)
+            return
+    clientXrpl = xrpl.clients.JsonRpcClient("https://xrplcluster.com/")
+    if tocurrency == "XRP":
+        curData = helper.getCurData(curMain)
+        # ammStat = await helper.get_swap_stats(clientXrpl,curMain,curData["issuer"], amount, True)
+        loop = asyncio.get_event_loop()
+        ammStat = await loop.run_in_executor(None, helper.get_swap_stats, clientXrpl, curMain, curData["issuer"], amount, False)
+        if ammStat is None:
+            await interaction.response.send_message("Failed to swap", ephemeral=True)
+            return
+    else:
+        if len(tocurrency) > 3:
+            curMain = helper.str_to_hex(tocurrency)
+        else:
+            curMain = tocurrency
+        curData = helper.getCurData(curMain)
+        # ammStat = await helper.get_swap_stats(clientXrpl,curMain,curData["issuer"], amount, False)
+        loop = asyncio.get_event_loop()
+        ammStat = await loop.run_in_executor(None, helper.get_swap_stats, clientXrpl, curMain, curData["issuer"], amount, True)
+        if ammStat is None:
+            await interaction.response.send_message("Failed to swap", ephemeral=True)
+            return
+    if ammStat:
+        embed = discord.Embed(title="Swap Details", color=0x00FF00, description="Please confirm the swap")
+        embed.add_field(name="From", value=f"{amount} {fromcurrency}")
+        embed.add_field(name="To", value=f"{ammStat} {tocurrency}")
+        embed.add_field(name="Slippage", value="1.5%")
+        button = discord.ui.Button(style=discord.ButtonStyle.green, label="Confirm", custom_id="confirm_swap")
+        async def callback(interaction: discord.Interaction):
+            await interaction.response.defer(ephemeral=True)
+            loop = asyncio.get_event_loop()
+            if fromcurrency == "XRP":
+                if len(tocurrency) > 3:
+                    curMain = helper.str_to_hex(tocurrency)
+                else:
+                    curMain = tocurrency
+                curData = helper.getCurData(curMain)
+                sent = await loop.run_in_executor(None, helper.execute_swap, clientXrpl, curMain, curData["issuer"], amount, False, str(interaction.user.id))
+            else:
+                if len(fromcurrency) > 3:
+                    curMain = helper.str_to_hex(fromcurrency)
+                else:    
+                    curMain = fromcurrency
+                curData = helper.getCurData(curMain)
+                sent = await loop.run_in_executor(None, helper.execute_swap, clientXrpl, curMain, curData["issuer"], amount, True, str(interaction.user.id))
+            if not sent:
+                await interaction.response.send_message("Failed to swap", ephemeral=True)
+                return
+            await interaction.followup.edit_message(content="Swapped successfully", embed=None, view=None, message_id=interaction.message.id)
+        button.callback = callback
+        view = discord.ui.View()
+        view.add_item(button)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 @tree.command(name="supported", description="List of supported currencies")
 async def supported(interaction: discord.Interaction):
