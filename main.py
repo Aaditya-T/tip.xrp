@@ -311,6 +311,97 @@ async def supported(interaction: discord.Interaction):
         embed.add_field(name=cur, value=f"Issuer: {issuer}\nCode: {currency['currency']}", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+
+@tree.command(name='p2p', description='Trade with another user')
+async def ptp(interaction: discord.Interaction, user: discord.User, giveamount: float, givecurrency: Literal["XRP", "SOLO", "CSC", "USD", "ZRP"], getamount: float, getcurrency: Literal["XRP", "SOLO", "CSC", "USD", "ZRP"]):
+    curMain = givecurrency
+    if len(curMain) > 3:
+        curMain = helper.str_to_hex(givecurrency)
+    userData = helper.getUser(interaction.user.id)
+    if userData is None:
+        await interaction.response.send_message(
+            "You are not registered!", ephemeral=True
+        )
+        return
+    if giveamount <= 0 or getamount <= 0:
+        await interaction.response.send_message("Invalid amount", ephemeral=True)
+        return
+    if givecurrency == getcurrency:
+        await interaction.response.send_message("Cannot trade same currency", ephemeral=True)
+        return
+    if givecurrency != "XRP":
+        for tl in userData["tls"]:
+            if tl["currency"] == curMain:
+                if tl["value"] < giveamount:
+                    await interaction.response.send_message("Insufficient balance", ephemeral=True)
+                    return
+                break
+        else:
+            await interaction.response.send_message("You don't have a trustline for this currency", ephemeral=True)
+            return
+    else:
+        if userData["xrpBalance"] < giveamount:
+            await interaction.response.send_message("Insufficient balance", ephemeral=True)
+            return
+    userData2 = helper.getUser(user.id)
+    if userData2 is None:
+        await interaction.response.send_message(
+            "The other user is not registered!", ephemeral=True
+        )
+        return
+    if getcurrency != "XRP":
+        for tl in userData2["tls"]:
+            if tl["currency"] == getcurrency:
+                if tl["value"] < getamount:
+                    await interaction.response.send_message("The other user has insufficient balance", ephemeral=True)
+                    return
+                break
+        else:
+            await interaction.response.send_message("The other user doesn't have a trustline for this currency", ephemeral=True)
+            return
+    else:
+        if userData2["xrpBalance"] < getamount:
+            await interaction.response.send_message("The other user has insufficient balance", ephemeral=True)
+            return
+    embed = discord.Embed(title="Trade Details", color=0x00FF00, description=f"{user.mention} please confirm the trade")
+    embed.add_field(name="Give", value=f"{giveamount} {givecurrency}")
+    embed.add_field(name="Get", value=f"{getamount} {getcurrency}")
+    button = discord.ui.Button(style=discord.ButtonStyle.green, label="Confirm", custom_id="confirm_trade")
+    async def callback(interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        #deduct giveamount from user1 and add getamount to user1
+        # if givecurrency == "XRP":
+        #     #deduct from user1
+        #     helper.removeXrpBalance(str(interaction.user.id), giveamount)
+        #     #add to user2
+        #     helper.addXrpBalance(str(user.id), getamount)
+        # if getcurrency == "XRP":
+        #     #deduct from user2
+        #     helper.removeXrpBalance(str(user.id), getamount)
+        #     #add to user1
+        #     helper.addXrpBalance(str(interaction.user.id), giveamount)
+        # if givecurrency != "XRP":
+        #     #deduct from user1
+        #     helper.removeTlBalance(str(interaction.user.id), curMain, giveamount)
+        #     #add to user2
+        #     helper.addTlBalance(str(user.id), curMain, giveamount)
+        # if getcurrency != "XRP":
+        #     #deduct from user2
+        #     helper.removeTlBalance(str(user.id), getcurrency, getamount)
+        #     #add to user1
+        #     helper.addTlBalance(str(interaction.user.id), getcurrency, getamount)
+        embed = discord.Embed(title="Trade Details", color=0x00FF00, description=f"Trade successful")
+        embed.add_field(name="Give", value=f"{giveamount} {givecurrency}")
+        embed.add_field(name="Get", value=f"{getamount} {getcurrency}")
+        embed.add_field(name="From", value=interaction.user.mention)
+        embed.add_field(name="To", value=user.mention)
+        await interaction.followup.edit_message(embed=embed, view=None, message_id=interaction.message.id)
+    button.callback = callback
+    view = discord.ui.View()
+    view.add_item(button)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        
+
 # a help command which lists all the commands
 @tree.command(name="help", description="List all commands")
 async def help(interaction: discord.Interaction):
